@@ -1,0 +1,30 @@
+# PictureQA Demo 配置檔案
+app:
+  title: "PictureQA Demo - 圖片與文字相似度分析工具"
+  page_icon: "🖼️"
+  layout: "wide"
+
+model:
+  name: "ViT-B-32"
+  pretrained: "laion2b_s34b_b79k"
+
+processing:
+  batch_size: 32
+  supported_formats: [".png", ".jpg", ".jpeg", ".bmp", ".tiff"]
+  max_image_size: 1024
+  
+ui:
+  similarity_threshold_default: 0.5
+  similarity_threshold_min: 0.0
+  similarity_threshold_max: 1.0
+  similarity_threshold_step: 0.01
+  images_per_row: 4
+  max_images_display: 100
+
+cache:
+  enabled: true
+  cache_dir: "data/cache"
+  
+export:
+  results_dir: "data/results"
+  exports_dir: "data/exports" 
