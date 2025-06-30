@@ -29,8 +29,11 @@ def render_results_viewer(results: List[Dict[str, Any]],
         st.info("📝 還沒有分析結果，請先選擇資料夾並輸入 Prompt 開始分析")
         return
     
-    # 過濾結果
-    successful_results = [r for r in results if r.get('success', False)]
+    # 過濾結果 - 支援新舊格式
+    successful_results = [
+        r for r in results 
+        if (r.get('success', False) or r.get('clip_status') == 'success')
+    ]
     filtered_results = [
         r for r in successful_results 
         if r.get('similarity_score', 0) >= similarity_threshold
@@ -176,7 +179,9 @@ def show_image_details(result: Dict[str, Any]) -> None:
             st.write(f"- 檔案名稱: {result.get('image_name', 'N/A')}")
             st.write(f"- 相似度分數: {format_similarity_score(result.get('similarity_score', 0))}")
             st.write(f"- Prompt: {result.get('prompt', 'N/A')}")
-            st.write(f"- 處理狀態: {'成功' if result.get('success', False) else '失敗'}")
+            # 處理狀態判斷 - 支援新舊格式
+            is_success = result.get('success', False) or result.get('clip_status') == 'success'
+            st.write(f"- 處理狀態: {'成功' if is_success else '失敗'}")
             
             # 顯示檔案資訊
             image_path = result.get('image_path', '')
@@ -210,7 +215,11 @@ def render_results_summary(results: List[Dict[str, Any]],
     
     # 計算統計資料
     total_images = len(results)
-    successful_analyses = len([r for r in results if r.get('success', False)])
+    # 成功分析數量 - 支援新舊格式
+    successful_analyses = len([
+        r for r in results 
+        if (r.get('success', False) or r.get('clip_status') == 'success')
+    ])
     failed_analyses = total_images - successful_analyses
     displayed_images = len(filtered_results)
     

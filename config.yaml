@@ -8,6 +8,45 @@ model:
   name: "ViT-B-32"
   pretrained: "laion2b_s34b_b79k"
 
+# Ollama 多模態驗證配置
+ollama:
+  enabled: false  # 預設關閉，用戶可手動開啟
+  model_name: "phi4-mini"  # 可配置的模型名稱
+  api_url: "http://localhost:11434"  # Ollama API 地址
+  timeout: 30  # 請求超時時間（秒）
+  verification_threshold: 0.6  # 只有相似度超過此值才進行二階段驗證
+  confidence_threshold: 0.7  # 最低信心度要求
+  
+  # 預設 Prompt 模板
+  default_prompt: |
+    Analyze this image for quality and realism issues. Check for:
+
+    Physical Realism:
+    - Objects floating without proper support
+    - Impossible physics or gravity violations
+    - Unrealistic proportions or scaling
+    - Contradictory lighting or shadows
+
+    Image Quality Issues:
+    - Watermarks or copyright marks
+    - Magazine-style text overlays
+    - Publisher logos or branding
+    - Stock photo watermarks
+    - Any printed text that shouldn't be part of the actual object/scene
+
+    Reply ONLY in JSON format:
+    {{
+      "image": "{image_name}",
+      "status": "normal" or "abnormal",
+      "confidence": 0.0-1.0,
+      "details": "brief explanation of main issues",
+      "issues": {{
+        "physics": ["list", "of", "physics", "problems"],
+        "watermarks": ["list", "of", "text/watermark", "issues"],
+        "quality": ["other", "quality", "issues"]
+      }}
+    }}
+
 processing:
   batch_size: 32
   supported_formats: [".png", ".jpg", ".jpeg", ".bmp", ".tiff"]

@@ -30,11 +30,12 @@ def render_similarity_filter(results: List[Dict[str, Any]]) -> float:
     
     st.subheader("🎚️ 相似度過濾器")
     
-    # 取得成功的相似度分數
+    # 取得成功的相似度分數 - 支援新舊格式
     similarity_scores = [
         result['similarity_score'] 
         for result in results 
-        if result.get('success', False) and result.get('similarity_score') is not None
+        if (result.get('success', False) or result.get('clip_status') == 'success') and 
+           result.get('similarity_score') is not None
     ]
     
     if not similarity_scores:
@@ -68,10 +69,10 @@ def render_similarity_filter(results: List[Dict[str, Any]]) -> float:
         help="調整此滑桿來過濾顯示符合相似度要求的圖片"
     )
     
-    # 計算過濾後的結果
+    # 計算過濾後的結果 - 支援新舊格式
     filtered_results = [
         result for result in results
-        if result.get('success', False) and 
+        if (result.get('success', False) or result.get('clip_status') == 'success') and 
            result.get('similarity_score', 0) >= threshold
     ]
     
@@ -262,7 +263,7 @@ def get_filtered_results(results: List[Dict[str, Any]], threshold: float) -> Lis
     """
     return [
         result for result in results
-        if result.get('success', False) and 
+        if (result.get('success', False) or result.get('clip_status') == 'success') and 
            result.get('similarity_score', 0) >= threshold
     ]
 
