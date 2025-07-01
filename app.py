@@ -126,7 +126,7 @@ def validate_image():
         prompt = data['prompt']
         
         # 提取可選參數（使用預設值）
-        similarity_threshold = data.get('similarity_threshold', 0.38)
+        similarity_threshold = data.get('similarity_threshold', 0.36)
         ollama_enabled = data.get('ollama_enabled', True)
         confidence_threshold = data.get('confidence_threshold', 0.7)
         

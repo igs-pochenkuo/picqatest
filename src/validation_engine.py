@@ -6,6 +6,8 @@
 from typing import Dict, List, Optional, Callable, Any
 from pathlib import Path
 import time
+import subprocess
+import requests
 
 from similarity_engine import SimilarityEngine
 from ollama_validator import OllamaValidator
@@ -155,11 +157,25 @@ class ValidationEngine:
             # 檢查 Ollama 連線
             connection_status = self.ollama_validator.check_connection()
             if not connection_status['connected']:
-                # Ollama 無法連線，標記所有需要驗證的圖片
-                for idx in images_for_validation:
-                    results[idx]['ollama_validation']['status'] = 'error'
-                    results[idx]['ollama_validation']['details'] = connection_status['message']
-                    self.stats['ollama_skipped'] += 1
+                # 嘗試自動啟動 Ollama 服務
+                if progress_callback:
+                    progress_callback(0.4, "檢測到 Ollama 未運行，嘗試自動啟動...")
+                
+                print("🔄 檢測到 Ollama 服務未運行，嘗試自動啟動...")
+                startup_success = self._auto_start_ollama(progress_callback)
+                
+                if startup_success:
+                    # 重新檢查連線
+                    connection_status = self.ollama_validator.check_connection()
+                    print(f"🔗 重新檢查連線狀態: {connection_status['connected']}")
+                
+                if not connection_status['connected']:
+                    # 自動啟動失敗或仍無法連線，標記所有需要驗證的圖片
+                    print("❌ Ollama 服務啟動失敗或無法連線，跳過 Ollama 驗證")
+                    for idx in images_for_validation:
+                        results[idx]['ollama_validation']['status'] = 'error'
+                        results[idx]['ollama_validation']['details'] = f"自動啟動失敗: {connection_status['message']}"
+                        self.stats['ollama_skipped'] += 1
             else:
                 # 執行 Ollama 驗證
                 validation_prompt = self.settings.get('custom_prompt') or self.ollama_validator.default_prompt
@@ -300,6 +316,112 @@ class ValidationEngine:
         
         return info
     
+    def _auto_start_ollama(self, progress_callback: Optional[Callable] = None) -> bool:
+        """
+        自動啟動 Ollama 服務
+        
+        Args:
+            progress_callback (Optional[Callable], optional): 進度回調函數
+            
+        Returns:
+            bool: 啟動是否成功
+        """
+        try:
+            # 檢查是否已經運行
+            try:
+                response = requests.get('http://localhost:11434/api/tags', timeout=2)
+                if response.status_code == 200:
+                    print("✅ Ollama 服務已在運行")
+                    return True
+            except:
+                pass
+            
+            print("🚀 正在啟動 Ollama 服務...")
+            
+            # 尋找 Ollama 執行檔路徑
+            ollama_path = self._find_ollama_executable()
+            if not ollama_path:
+                print("❌ 找不到 Ollama 執行檔")
+                return False
+            
+            print(f"🔍 找到 Ollama: {ollama_path}")
+            
+            # 啟動 Ollama 服務 (在背景執行)
+            subprocess.Popen([ollama_path, 'serve'], 
+                            stdout=subprocess.DEVNULL, 
+                            stderr=subprocess.DEVNULL)
+            
+            # 等待服務啟動
+            print("⏳ 等待 Ollama 服務啟動...")
+            for i in range(30):  # 最多等待 30 秒
+                if progress_callback:
+                    progress_callback(0.4, f"等待 Ollama 啟動... ({i+1}/30)")
+                
+                time.sleep(1)
+                
+                try:
+                    response = requests.get('http://localhost:11434/api/tags', timeout=2)
+                    if response.status_code == 200:
+                        print("✅ Ollama 服務啟動成功")
+                        return True
+                except:
+                    pass
+                
+                if i % 5 == 4:
+                    print(f"   等待中... ({i+1}/30)")
+            
+            print("❌ Ollama 服務啟動超時")
+            return False
+            
+        except Exception as e:
+            print(f"❌ 啟動 Ollama 失敗: {str(e)}")
+            return False
+
+    def _find_ollama_executable(self) -> Optional[str]:
+        """
+        尋找 Ollama 執行檔路徑
+        
+        Returns:
+            Optional[str]: Ollama 執行檔路徑，找不到返回 None
+        """
+        import os
+        import shutil
+        from pathlib import Path
+        
+        # 方法 1: 檢查 PATH 中是否有 ollama
+        ollama_in_path = shutil.which('ollama')
+        if ollama_in_path:
+            return ollama_in_path
+        
+        # 方法 2: 檢查常見的 Windows 安裝位置
+        possible_paths = [
+            # 用戶本地安裝
+            Path.home() / "AppData" / "Local" / "Programs" / "Ollama" / "ollama.exe",
+            # 系統安裝
+            Path("C:/Program Files/Ollama/ollama.exe"),
+            Path("C:/Program Files (x86)/Ollama/ollama.exe"),
+            # 其他可能位置
+            Path("C:/Ollama/ollama.exe"),
+        ]
+        
+        for path in possible_paths:
+            if path.exists():
+                return str(path)
+        
+        # 方法 3: 搜尋所有用戶目錄
+        try:
+            users_dir = Path("C:/Users")
+            if users_dir.exists():
+                for user_dir in users_dir.iterdir():
+                    if user_dir.is_dir():
+                        ollama_path = user_dir / "AppData" / "Local" / "Programs" / "Ollama" / "ollama.exe"
+                        if ollama_path.exists():
+                            return str(ollama_path)
+        except:
+            pass
+        
+        return None
+
     def cleanup_resources(self):
         """清理所有資源"""
         try:

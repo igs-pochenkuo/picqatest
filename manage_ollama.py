@@ -48,28 +48,69 @@ def stop_ollama():
     for proc in processes:
         print(f"  - PID: {proc['pid']}, 名稱: {proc['name']}, 記憶體: {proc['memory_mb']:.1f} MB")
     
-    # 嘗試優雅關閉
-    try:
-        result = subprocess.run(['taskkill', '/IM', 'ollama.exe', '/T'], 
-                              capture_output=True, text=True, timeout=10)
-        if result.returncode == 0:
-            print("✅ Ollama 服務已停止")
-        else:
-            print("⚠️ 優雅關閉失敗，嘗試強制終止...")
-            subprocess.run(['taskkill', '/IM', 'ollama.exe', '/F'], 
-                          capture_output=True, text=True, timeout=10)
-    except subprocess.TimeoutExpired:
-        print("❌ 停止操作超時")
-        return False
-    except Exception as e:
-        print(f"❌ 停止失敗: {e}")
-        return False
+    # 第一步：嘗試優雅關閉所有 ollama 相關進程
+    ollama_executables = ['ollama.exe', 'ollama app.exe', 'ollama_app.exe']
     
-    # 等待並檢查
-    time.sleep(3)
+    for exe_name in ollama_executables:
+        try:
+            print(f"🔄 嘗試優雅關閉 {exe_name}...")
+            result = subprocess.run(['taskkill', '/IM', exe_name, '/T'], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                print(f"✅ {exe_name} 已優雅關閉")
+            else:
+                print(f"⚠️ {exe_name} 優雅關閉失敗: {result.stderr.strip()}")
+        except subprocess.TimeoutExpired:
+            print(f"⚠️ {exe_name} 優雅關閉超時")
+        except Exception as e:
+            print(f"⚠️ {exe_name} 優雅關閉異常: {e}")
+    
+    # 等待一下讓進程有時間關閉
+    time.sleep(2)
+    
+    # 檢查剩餘進程
+    remaining_processes = get_ollama_processes()
+    if not remaining_processes:
+        print("✅ 所有 Ollama 進程已停止")
+        return True
+    
+    # 第二步：強制終止剩餘進程
+    print("⚠️ 優雅關閉失敗，嘗試強制終止...")
+    
+    for exe_name in ollama_executables:
+        try:
+            print(f"💀 強制終止 {exe_name}...")
+            result = subprocess.run(['taskkill', '/IM', exe_name, '/F'], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                print(f"✅ {exe_name} 已強制終止")
+        except Exception as e:
+            print(f"⚠️ 強制終止 {exe_name} 失敗: {e}")
+    
+    # 第三步：按 PID 強制終止剩餘進程
     remaining_processes = get_ollama_processes()
     if remaining_processes:
-        print(f"⚠️ 仍有 {len(remaining_processes)} 個進程未停止")
+        print("🎯 按 PID 強制終止剩餘進程...")
+        for proc in remaining_processes:
+            try:
+                print(f"💀 強制終止 PID {proc['pid']} ({proc['name']})...")
+                result = subprocess.run(['taskkill', '/PID', str(proc['pid']), '/F'], 
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    print(f"✅ PID {proc['pid']} 已終止")
+                else:
+                    print(f"⚠️ PID {proc['pid']} 終止失敗: {result.stderr.strip()}")
+            except Exception as e:
+                print(f"⚠️ 終止 PID {proc['pid']} 異常: {e}")
+    
+    # 最終檢查
+    time.sleep(3)
+    final_processes = get_ollama_processes()
+    if final_processes:
+        print(f"❌ 仍有 {len(final_processes)} 個進程未停止:")
+        for proc in final_processes:
+            print(f"  - PID: {proc['pid']}, 名稱: {proc['name']}")
+        print("💡 提示：某些進程可能需要管理員權限才能終止")
         return False
     else:
         print("✅ 所有 Ollama 進程已停止")
