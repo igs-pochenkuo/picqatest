@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 import csv
 
-from .config import config
-from .utils import (
+from config import config
+from utils import (
     save_results_to_json, 
     load_results_from_json, 
     create_timestamp_filename,

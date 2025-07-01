@@ -12,8 +12,8 @@ from pathlib import Path
 import pickle
 import os
 
-from .config import config
-from .utils import generate_cache_key, resize_image_if_needed
+from config import config
+from utils import generate_cache_key, resize_image_if_needed
 
 class SimilarityEngine:
     """相似度計算引擎"""

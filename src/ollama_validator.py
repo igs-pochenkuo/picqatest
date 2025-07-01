@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Callable, Any
 from PIL import Image
 import io
 
-from .config import config
+from config import config
 
 
 class OllamaValidator:
