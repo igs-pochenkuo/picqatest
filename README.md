@@ -1,353 +1,425 @@
-# PictureQA Demo - 圖片與文字相似度分析工具 (二階段驗證版)
+# PictureQA Flask API - 圖片語義驗證服務
 
-基於 CLIP 模型的圖片與文字相似度分析工具，現在支援 **Ollama 多模態現實性驗證**！提供直觀的 Web 介面來批次處理圖片，不僅分析語義相似度，還能檢測圖片的物理合理性。
+基於 CLIP 模型和 Ollama 多模態驗證的圖片語義分析 API 服務，專為 N8N 工作流程和其他自動化系統設計。提供高效的圖片下載、語義相似度分析和現實性驗證功能。
 
 ## 🌟 主要功能
 
-### 核心分析功能
-- 🖼️ **批次分析**: 一次處理整個資料夾的圖片
-- 🎚️ **即時過濾**: 調整相似度閾值即時查看結果
-- 📊 **視覺化統計**: 相似度分佈圖表和統計資訊
-- 💾 **結果匯出**: 支援 CSV 格式匯出
-- 🚀 **效能優化**: GPU 加速和智慧快取
-- 🎯 **智慧建議**: 根據資料夾名稱提供 Prompt 建議
+### 核心 API 功能
+- 🔗 **RESTful API**: 標準 HTTP API 介面，易於整合
+- 🖼️ **圖片 URL 處理**: 支援網路圖片 URL 和內網地址
+- 🎯 **語義相似度分析**: 基於 CLIP ViT-B-32 模型
+- 🤖 **現實性驗證**: 整合 Ollama phi4-mini 多模態檢測
+- ⚡ **高效處理**: 單張圖片 2-10 秒處理時間
+- 🛡️ **錯誤處理**: 完整的錯誤回應和日誌記錄
 
-### 🆕 二階段驗證功能
-- 🤖 **Ollama 整合**: 使用本地多模態模型進行現實性檢測
-- 🔍 **物理合理性檢測**: 識別浮空物體、違反重力等不合理現象
-- 🏷️ **浮水印檢測**: 過濾含有浮水印、版權標記的圖片
-- 📰 **印刷文字檢測**: 識別雜誌封面、商品包裝上的不當文字
-- ⚙️ **可配置驗證**: 自定義驗證門檻和 Prompt
-- 📈 **詳細統計**: 提供二階段驗證的完整統計報告
+### 驗證能力
+- 📊 **語義匹配**: 計算圖片與文字提示的相似度分數
+- 🔍 **物理合理性**: 檢測浮空物體、重力違反等問題
+- 🏷️ **浮水印識別**: 過濾含有版權標記的圖片
+- 📰 **文字內容檢測**: 識別不當的印刷文字覆蓋
+- 🎚️ **可調節閾值**: 靈活配置相似度和信心度閾值
 
-## 🛠️ 技術架構
+## 🏗️ 架構設計
 
-- **後端**: Python 3.8+
+```mermaid
+graph TB
+    A[客戶端請求] --> B[Flask API]
+    B --> C[參數驗證]
+    C --> D[ImageDownloader]
+    D --> E[SimilarityEngine CLIP]
+    E --> F{相似度 >= 閾值?}
+    F -->|Yes| G[OllamaValidator]
+    F -->|No| H[直接接受]
+    G --> I[ValidationEngine]
+    H --> I
+    I --> J[JSON 回應]
+```
+
+### 技術棧
+- **後端框架**: Flask + CORS
 - **AI 模型**: 
-  - OpenCLIP (ViT-B-32) - 語義相似度分析
+  - OpenCLIP (ViT-B-32) - 語義相似度
   - Ollama (phi4-mini) - 現實性驗證
-- **前端介面**: Streamlit
-- **資料處理**: PyTorch, PIL, Pandas
-- **視覺化**: Matplotlib, Plotly
-- **API 通訊**: Requests (Ollama API)
+- **圖片處理**: PIL + requests
+- **資源管理**: 自動清理 GPU 記憶體和臨時檔案
+- **部署目標**: Mac/Linux 伺服器 (支援 Windows 測試)
 
-## 📦 安裝說明
+## 📦 快速安裝
 
 ### 1. 環境需求
+- Python 3.8+
+- 8GB+ RAM (建議 16GB)
+- GPU 支援 (可選，用於加速)
+- Ollama 服務 (可選，用於現實性驗證)
 
-- Python 3.8 或更高版本
-- CUDA (可選，用於 GPU 加速)
-- Ollama (用於二階段驗證，可選)
-
-### 2. 安裝 Python 依賴套件
+### 2. 安裝步驟
 
 ```bash
+# 克隆專案 (切換到 FlaskVersion 分支)
+git clone -b FlaskVersion https://github.com/your-repo/pictureQA.git
+cd pictureQA
+
+# 安裝 Python 依賴
 pip install -r requirements.txt
-```
 
-### 3. 安裝 Ollama (可選)
-
-如果要使用二階段驗證功能，需要安裝 Ollama：
-
-#### Windows/macOS/Linux:
-```bash
-# 下載並安裝 Ollama
-# 訪問 https://ollama.ai 下載安裝程式
-
-# 安裝 phi4-mini 模型
+# 安裝 Ollama (可選)
+# 訪問 https://ollama.ai 下載安裝
 ollama pull phi4-mini
+
+# 啟動服務
+python app.py
 ```
 
-### 4. 驗證安裝
+### 3. 驗證安裝
 
 ```bash
-# 驗證 Python 套件
-python -c "import torch; import open_clip; print('Python 套件安裝成功！')"
+# 檢查 API 健康狀態
+curl http://localhost:5000/health
 
-# 驗證 Ollama (可選)
-ollama list
+# 執行測試套件
+python test_api.py        # 基礎 API 測試
+python simple_test.py     # 簡化功能測試
 ```
 
-## 🚀 使用方法
+## 🚀 API 使用指南
 
-### 1. 啟動應用程式
+### 端點說明
 
-```bash
-streamlit run ui/main_app.py
+#### 1. 健康檢查
+```http
+GET /health
 ```
 
-或使用啟動腳本：
-
-```bash
-python run.py
+**回應範例:**
+```json
+{
+  "status": "healthy",
+  "service": "PictureQA API",
+  "version": "1.0.0",
+  "timestamp": "2025-07-01T12:00:00.000Z"
+}
 ```
 
-應用程式將在瀏覽器中自動開啟，預設地址為 `http://localhost:8501`
-
-### 2. 基本使用步驟
-
-#### 傳統 CLIP 分析模式
-1. **選擇資料夾**: 輸入或貼上包含圖片的資料夾路徑
-2. **輸入 Prompt**: 輸入英文描述，例如 "cookies on a plate"
-3. **開始分析**: 點擊「開始 CLIP 分析」按鈕
-4. **查看結果**: 在「結果」頁籤中調整相似度閾值查看過濾結果
-5. **匯出資料**: 將結果匯出為 CSV 格式
-
-#### 🆕 二階段驗證模式
-1. **選擇資料夾**: 輸入包含圖片的資料夾路徑
-2. **輸入 Prompt**: 輸入英文描述
-3. **啟用多模態驗證**: 勾選「啟用 Ollama 現實性檢測」
-4. **配置驗證設定**:
-   - 設定二階段驗證門檻 (建議 0.6)
-   - 選擇使用預設或自定義 Prompt
-   - 調整進階設定 (可選)
-5. **開始分析**: 點擊「開始二階段驗證分析」按鈕
-6. **查看結果**: 檢視 CLIP 相似度和 Ollama 驗證結果
-7. **統計分析**: 在「統計」頁籤查看詳細驗證報告
-
-### 3. 範例使用
-
-假設你有一個包含餅乾圖片的資料夾：
-
-```
-E:/AI/pictureQA/testPic/3餅乾/
-├── ComfyUI_00224_.png  (正常餅乾圖片)
-├── ComfyUI_00225_.png  (有浮水印的圖片)
-├── ComfyUI_00226_.png  (物理不合理的圖片)
-└── ...
+#### 2. 圖片驗證 (主要端點)
+```http
+POST /api/v1/validate
+Content-Type: application/json
 ```
 
-**二階段驗證流程**:
-1. 資料夾路徑: `E:/AI/pictureQA/testPic/3餅乾`
-2. Prompt: `cookies on a plate`
-3. 啟用 Ollama 驗證，門檻設為 0.6
-4. 系統會先用 CLIP 分析相似度
-5. 對相似度 ≥ 0.6 的圖片進行 Ollama 現實性檢測
-6. 最終只保留物理合理且無浮水印的圖片
-
-## 📁 專案結構
-
-```
-pictureQA/
-├── src/                          # 核心功能模組
-│   ├── config.py                # 配置管理
-│   ├── similarity_engine.py     # CLIP 相似度計算引擎
-│   ├── ollama_validator.py      # 🆕 Ollama 驗證引擎
-│   ├── validation_engine.py     # 🆕 二階段驗證整合引擎
-│   ├── data_manager.py          # 資料管理器
-│   └── utils.py                 # 工具函數
-├── ui/                           # 使用者介面
-│   ├── main_app.py              # 主應用程式
-│   └── components/              # UI 元件
-│       ├── folder_selector.py
-│       ├── prompt_input.py
-│       ├── similarity_filter.py
-│       ├── result_viewer.py
-│       └── validation_controls.py  # 🆕 驗證控制介面
-├── data/                         # 資料目錄
-│   ├── results/                 # 分析結果
-│   ├── exports/                 # 匯出檔案
-│   └── cache/                   # 快取檔案
-├── testPic/                      # 測試圖片
-├── config.yaml                  # 應用配置 (含 Ollama 設定)
-├── requirements.txt             # 依賴套件
-├── run.py                       # 啟動腳本
-└── README.md                    # 說明文件
+**請求參數:**
+```json
+{
+  "image_url": "https://example.com/image.jpg",
+  "prompt": "A cat sitting on a table",
+  "similarity_threshold": 0.38,
+  "ollama_enabled": true,
+  "confidence_threshold": 0.7
+}
 ```
 
-## ⚙️ 配置選項
+**參數說明:**
+- `image_url` (必填): 圖片 URL，支援網路和內網地址
+- `prompt` (必填): 英文描述文字
+- `similarity_threshold` (可選): CLIP 相似度閾值，預設 0.38
+- `ollama_enabled` (可選): 是否啟用 Ollama 驗證，預設 true
+- `confidence_threshold` (可選): Ollama 信心度閾值，預設 0.7
 
-編輯 `config.yaml` 檔案來自訂應用程式設定：
+**成功回應範例:**
+```json
+{
+  "success": true,
+  "image_url": "https://example.com/cat.jpg",
+  "prompt": "A cat sitting on a table",
+  "parameters": {
+    "similarity_threshold": 0.38,
+    "ollama_enabled": true,
+    "confidence_threshold": 0.7
+  },
+  "image_info": {
+    "width": 800,
+    "height": 600,
+    "format": "JPEG",
+    "size_bytes": 156789
+  },
+  "download_info": {
+    "status": "success",
+    "processing_time": 0.85,
+    "message": "下載成功"
+  },
+  "clip_analysis": {
+    "similarity_score": 0.7234,
+    "status": "success",
+    "processing_time": 0.65
+  },
+  "ollama_validation": {
+    "enabled": true,
+    "status": "normal",
+    "confidence": 0.92,
+    "details": "Image appears physically realistic...",
+    "processing_time": 2.34
+  },
+  "final_status": "accepted",
+  "total_processing_time": 3.84,
+  "timestamp": "2025-07-01T12:00:00.000Z"
+}
+```
+
+**錯誤回應範例:**
+```json
+{
+  "success": false,
+  "error": "image_download_failed",
+  "message": "無法下載指定的圖片",
+  "image_url": "https://invalid-url.com/image.jpg",
+  "timestamp": "2025-07-01T12:00:00.000Z"
+}
+```
+
+### 狀態碼說明
+- `200`: 處理成功
+- `400`: 客戶端錯誤 (參數錯誤、URL 無效等)
+- `404`: 端點不存在
+- `500`: 伺服器內部錯誤
+
+## 🔧 配置說明
+
+編輯 `config.yaml` 自訂服務設定：
 
 ```yaml
-# CLIP 模型設定
+# CLIP 模型配置
 model:
   name: "ViT-B-32"
   pretrained: "laion2b_s34b_b79k"
+  device: "auto"  # auto, cpu, cuda
 
-# 🆕 Ollama 多模態驗證配置
+# Ollama 配置
 ollama:
-  enabled: false                    # 預設關閉
-  model_name: "phi4-mini"          # Ollama 模型名稱
-  api_url: "http://localhost:11434" # Ollama API 地址
-  timeout: 30                       # 請求超時時間
-  verification_threshold: 0.6       # 二階段驗證門檻
-  confidence_threshold: 0.7         # 最低信心度要求
-  
-  # 預設驗證 Prompt
+  enabled: true
+  model_name: "phi4-mini"
+  api_url: "http://localhost:11434"
+  timeout: 30
   default_prompt: |
-    Analyze this image for quality and realism issues. Check for:
-    
-    Physical Realism:
-    - Objects floating without proper support
-    - Impossible physics or gravity violations
-    - Unrealistic proportions or scaling
-    - Contradictory lighting or shadows
-    
-    Image Quality Issues:
-    - Watermarks or copyright marks
-    - Magazine-style text overlays
-    - Publisher logos or branding
-    - Stock photo watermarks
-    - Any printed text that shouldn't be part of the actual object/scene
-    
-    Reply ONLY in JSON format: {...}
+    Analyze this image for quality and realism issues...
 
 # 處理設定
 processing:
-  batch_size: 32
-  supported_formats: [".png", ".jpg", ".jpeg", ".bmp", ".tiff"]
   max_image_size: 1024
+  supported_formats: [".png", ".jpg", ".jpeg", ".webp"]
+  cache_enabled: true
 
-# UI 設定
-ui:
-  similarity_threshold_default: 0.5
-  images_per_row: 4
-  max_images_display: 100
+# API 設定
+api:
+  host: "0.0.0.0"
+  port: 5000
+  debug: false
+  cors_enabled: true
 ```
 
-## 🎯 使用技巧
+## 🐳 Docker 部署
 
-### 1. Prompt 設計建議
+### Dockerfile
+```dockerfile
+FROM python:3.11-slim
 
-#### CLIP Prompt (語義分析)
-- 使用簡潔明確的英文描述
-- 避免過於複雜的句子
-- 可以包含物體、顏色、位置等描述
-- 範例：
-  - `"red apple on table"`
-  - `"cookies on a plate"`
-  - `"plastic water bottle"`
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 
-#### 🆕 Ollama Prompt (現實性驗證)
-- 專注於檢測項目的明確定義
-- 要求 JSON 格式回應以便程式解析
-- 可自定義檢測重點（物理、浮水印、文字等）
-- 建議包含信心度評估
+COPY . .
+EXPOSE 5000
 
-### 2. 二階段驗證策略
-
-#### 門檻設定建議
-- **驗證門檻 (0.6)**: 只對高相似度圖片進行昂貴的 Ollama 驗證
-- **信心度門檻 (0.7)**: 只接受高信心度的異常判定
-- **超時設定 (30s)**: 根據模型大小和硬體調整
-
-#### 效能優化
-- 先用快速的 CLIP 過濾，再用慢速的 Ollama 精檢
-- 批次處理減少 API 呼叫開銷
-- 合理設定門檻避免過度驗證
-
-### 3. 結果分析
-
-#### 傳統模式
-- **相似度閾值**: 通常 0.3-0.7 是比較有意義的範圍
-- **統計圖表**: 查看分佈圖了解整體相似度情況
-
-#### 🆕 驗證模式
-- **接受/拒絕統計**: 了解驗證效果
-- **驗證詳情**: 查看具體的物理問題和品質問題
-- **信心度分析**: 評估驗證結果的可信度
-
-## 🐛 常見問題
-
-### Q: Ollama 連線失敗
-
-**A**: 
-1. 確保 Ollama 服務已啟動: `ollama serve`
-2. 檢查模型是否已安裝: `ollama list`
-3. 確認 API 地址正確 (預設 `http://localhost:11434`)
-
-### Q: 二階段驗證很慢
-
-**A**: 
-1. 提高驗證門檻，減少需要驗證的圖片數量
-2. 使用更快的 Ollama 模型
-3. 調整超時設定避免等待過久
-
-### Q: Ollama 驗證結果不準確
-
-**A**: 
-1. 嘗試調整自定義 Prompt，更明確描述檢測需求
-2. 使用更大的模型 (如 llama3.2-vision)
-3. 調整信心度門檻，只接受高信心度結果
-
-### Q: 模型載入失敗
-
-**A**: 檢查網路連線，首次運行需要下載模型檔案。也可以嘗試更換預訓練模型。
-
-### Q: 記憶體不足
-
-**A**: 減少 `batch_size` 或 `max_image_size` 設定，或使用較小的圖片。
-
-## 📊 效能基準
-
-### CLIP 分析效能
-| 硬體配置 | 100張圖片處理時間 | 記憶體使用 |
-|---------|-----------------|-----------|
-| CPU (Intel i7) | ~2-3 分鐘 | ~2GB |
-| GPU (RTX 3060) | ~30-60 秒 | ~4GB |
-| GPU (RTX 4090) | ~15-30 秒 | ~6GB |
-
-### 🆕 二階段驗證效能
-| Ollama 模型 | 單張圖片驗證時間 | 記憶體使用 | 準確度 |
-|------------|----------------|-----------|--------|
-| phi4-mini | ~2-5 秒 | ~2GB | 良好 |
-| llama3.2-vision | ~5-10 秒 | ~4GB | 優秀 |
-| qwen2-vl | ~3-8 秒 | ~3GB | 優秀 |
-
-## 🔄 工作流程
-
-### 傳統模式
-```
-圖片輸入 → CLIP 分析 → 相似度過濾 → 結果輸出
+CMD ["python", "app.py"]
 ```
 
-### 🆕 二階段驗證模式
+### Docker Compose
+```yaml
+version: '3.8'
+services:
+  pictureqa-api:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./data:/app/data
 ```
-圖片輸入 → CLIP 分析 → 相似度 ≥ 門檻？ → Ollama 驗證 → 現實性判定 → 最終結果
-            ↓              ↓                    ↓
-        低相似度直接過濾   高相似度進入二階段    normal/abnormal
+
+## 🔗 N8N 整合範例
+
+### N8N 工作流程節點
+
+```json
+{
+  "nodes": [
+    {
+      "parameters": {
+        "url": "http://localhost:5000/api/v1/validate",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "image_url",
+              "value": "={{ $json.image_url }}"
+            },
+            {
+              "name": "prompt",
+              "value": "A realistic photo"
+            },
+            {
+              "name": "similarity_threshold",
+              "value": 0.4
+            }
+          ]
+        }
+      },
+      "name": "PictureQA Validation",
+      "type": "n8n-nodes-base.httpRequest"
+    }
+  ]
+}
 ```
+
+## 📊 效能指標
+
+### 處理時間基準 (單張圖片)
+| 組件 | CPU 模式 | GPU 模式 |
+|------|----------|----------|
+| 圖片下載 | 0.3-2s | 0.3-2s |
+| CLIP 分析 | 2-5s | 0.5-1s |
+| Ollama 驗證 | 3-8s | 2-5s |
+| **總計** | **5-15s** | **3-8s** |
+
+### 記憶體使用
+| 組件 | 記憶體需求 |
+|------|------------|
+| CLIP 模型 | ~2GB |
+| Ollama (phi4-mini) | ~2GB |
+| API 服務 | ~500MB |
+| **總計** | **~4.5GB** |
+
+## 🛠️ 開發工具
+
+### 測試腳本
+```bash
+# API 基礎測試
+python test_api.py
+
+# 實際驗證測試  
+python test_real_validation.py
+
+# 資源管理測試
+python test_resource_management.py
+
+# 特定 URL 測試
+python test_specific_url.py
+```
+
+### Ollama 管理
+```bash
+# 檢查 Ollama 狀態
+python manage_ollama.py status
+
+# 停止 Ollama 服務
+python manage_ollama.py stop
+
+# 重啟 Ollama 服務  
+python manage_ollama.py restart
+```
+
+## 🔍 故障排除
+
+### 常見問題
+
+#### 1. 啟動時間過長
+**原因**: 首次啟動需下載 CLIP 模型 (~600MB)
+**解決**: 耐心等待或使用預建立的 Docker 映像
+
+#### 2. Ollama 連接失敗
+**檢查步驟**:
+```bash
+# 確認 Ollama 服務運行
+curl http://localhost:11434/api/tags
+
+# 檢查模型是否安裝
+ollama list
+
+# 重啟 Ollama 服務
+python manage_ollama.py restart
+```
+
+#### 3. 記憶體不足
+**優化建議**:
+- 調整 `config.yaml` 中的 `max_image_size`
+- 使用 CPU 模式而非 GPU
+- 增加系統交換檔案大小
+
+#### 4. 內網圖片無法存取
+**檢查**:
+- 確認 URL 格式正確
+- 檢查網路連通性
+- 驗證內網防火牆設定
+
+### 日誌分析
+
+服務日誌包含詳細的處理資訊：
+```
+2025-07-01 12:00:00 - INFO - 開始驗證圖片: https://example.com/image.jpg
+2025-07-01 12:00:01 - INFO - 圖片下載成功: 156789 bytes (0.85s)
+2025-07-01 12:00:02 - INFO - CLIP 分析完成: 相似度 0.7234 (0.65s)
+2025-07-01 12:00:04 - INFO - Ollama 驗證完成: normal (2.34s)
+2025-07-01 12:00:04 - INFO - 驗證完成，結果: accepted
+```
+
+## 📈 擴展性考量
+
+### 水平擴展
+- 使用負載均衡器分散請求
+- 部署多個 API 實例
+- 共享模型快取目錄
+
+### 效能優化
+- 使用 Redis 快取驗證結果
+- 實施請求佇列系統
+- 使用更強大的 GPU 硬體
+
+### 監控建議
+- 使用 Prometheus + Grafana 監控
+- 設置 API 回應時間警報
+- 監控記憶體和 GPU 使用率
 
 ## 🤝 貢獻指南
 
-歡迎提交 Issue 和 Pull Request！
+1. Fork 專案並切換到 `FlaskVersion` 分支
+2. 建立功能分支: `git checkout -b feature/new-feature`
+3. 撰寫測試並確保通過
+4. 提交變更: `git commit -m 'Add new feature'`
+5. 推送分支: `git push origin feature/new-feature`
+6. 建立 Pull Request
 
-1. Fork 專案
-2. 創建功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交變更 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 開啟 Pull Request
+## 📝 版本歷史
 
-## 📝 更新日誌
-
-### v2.0.0 (2024-01-15) - 二階段驗證版
-- 🎉 **重大更新**: 加入 Ollama 多模態現實性驗證
-- 🤖 **物理合理性檢測**: 識別浮空物體、重力違反等問題
-- 🏷️ **浮水印檢測**: 過濾含有浮水印的圖片
-- 📰 **印刷文字檢測**: 識別不當的文字覆蓋
-- ⚙️ **可配置驗證**: 自定義驗證門檻和 Prompt
-- 📊 **統計增強**: 詳細的二階段驗證統計報告
-- 🔧 **架構重構**: 新增 ValidationEngine 統一管理
-- 🎨 **UI 升級**: 新增驗證控制介面和結果過濾器
-
-### v1.0.0 (2024-01-01)
-- 🎉 初始版本發布
-- ✨ 基本的圖片相似度分析功能
-- 📊 相似度過濾和視覺化
-- 💾 結果匯出功能
+### v2.1.0 (FlaskVersion Branch) - 2025-07-01
+- 🎉 **Flask API 重構**: 完整的 RESTful API 服務
+- 🔗 **N8N 整合**: 專為工作流程自動化設計
+- 🛡️ **資源管理**: 完善的記憶體和連接清理
+- 🌐 **內網支援**: 支援內網 IP 地址和 localhost
+- 📊 **效能優化**: 張量清理和 GPU 快取管理
+- 🧪 **完整測試**: API、功能和資源管理測試套件
+- 🔧 **服務管理**: Ollama 服務控制工具
 
 ## 📄 授權協議
 
-本專案採用 MIT 授權協議 - 詳見 [LICENSE](LICENSE) 檔案
+MIT License - 詳見 [LICENSE](LICENSE) 檔案
 
 ## 🙏 致謝
 
-- [OpenCLIP](https://github.com/mlfoundations/open_clip) - 提供 CLIP 模型實現
-- [Ollama](https://ollama.ai/) - 提供本地多模態模型服務
-- [Streamlit](https://streamlit.io/) - 提供優秀的 Web 應用框架
-- [phi4-mini](https://huggingface.co/microsoft/phi-4) - Microsoft 的多模態模型
+- [OpenCLIP](https://github.com/mlfoundations/open_clip) - CLIP 模型實現
+- [Ollama](https://ollama.ai/) - 本地多模態模型服務
+- [Flask](https://flask.palletsprojects.com/) - 輕量級 Web 框架
+- [N8N](https://n8n.io/) - 工作流程自動化平台
 
 ---
 
-**🚀 現在就開始使用二階段驗證，讓你的圖片分析更加智能和可靠！** 
+**🚀 專為生產環境設計的圖片語義驗證 API，現在就整合到你的自動化工作流程中！** 
