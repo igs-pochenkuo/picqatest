@@ -7,9 +7,9 @@ from typing import Dict, List, Optional, Callable, Any
 from pathlib import Path
 import time
 
-from .similarity_engine import SimilarityEngine
-from .ollama_validator import OllamaValidator
-from .config import config
+from similarity_engine import SimilarityEngine
+from ollama_validator import OllamaValidator
+from config import config
 
 
 class ValidationEngine:

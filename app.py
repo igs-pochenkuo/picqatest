@@ -12,6 +12,7 @@ import traceback
 from datetime import datetime
 import os
 import sys
+import time
 
 # 添加 src 目錄到 Python 路徑
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
@@ -19,6 +20,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 # 導入核心模組
 from config import Config
 from validation_engine import ValidationEngine
+from image_downloader import ImageDownloader
 
 # 初始化 Flask 應用
 app = Flask(__name__)
@@ -34,10 +36,11 @@ logger = logging.getLogger(__name__)
 # 全域變數
 config = None
 validation_engine = None
+image_downloader = None
 
 def initialize_services():
     """初始化服務組件"""
-    global config, validation_engine
+    global config, validation_engine, image_downloader
     
     try:
         # 載入配置
@@ -49,6 +52,13 @@ def initialize_services():
         if not validation_engine.initialize():
             raise Exception("驗證引擎初始化失敗")
         logger.info("驗證引擎初始化成功")
+        
+        # 初始化圖片下載器
+        image_downloader = ImageDownloader(
+            max_file_size=20 * 1024 * 1024,  # 20MB
+            timeout=30
+        )
+        logger.info("圖片下載器初始化成功")
         
         return True
     except Exception as e:
@@ -101,36 +111,104 @@ def validate_image():
         logger.info(f"開始驗證圖片: {image_url}")
         logger.info(f"使用提示: {prompt[:100]}...")
         
-        # TODO: 實現實際的驗證邏輯
-        # 目前返回測試回應
-        result = {
-            'success': True,
-            'image_url': image_url,
-            'prompt': prompt,
-            'parameters': {
-                'similarity_threshold': similarity_threshold,
-                'ollama_enabled': ollama_enabled,
-                'confidence_threshold': confidence_threshold
-            },
-            'clip_analysis': {
-                'similarity_score': 0.42,  # 測試值
-                'status': 'success',
-                'processing_time': 1.5
-            },
-            'ollama_validation': {
-                'enabled': ollama_enabled,
-                'status': 'normal',
-                'confidence': 0.85,
-                'details': 'Image appears to be high quality with no apparent issues.',
-                'processing_time': 3.2
-            },
-            'final_status': 'accepted',
-            'total_processing_time': 4.7,
-            'timestamp': datetime.now().isoformat()
-        }
+        start_time = datetime.now()
+        temp_image_path = None
         
-        logger.info(f"驗證完成，結果: {result['final_status']}")
-        return jsonify(result)
+        try:
+            # 第一步：下載圖片
+            logger.info("步驟 1: 下載圖片...")
+            download_start = time.time()
+            
+            success, temp_image_path, download_message = image_downloader.download_image(image_url)
+            download_time = time.time() - download_start
+            
+            if not success:
+                return jsonify({
+                    'success': False,
+                    'error': 'image_download_failed',
+                    'message': download_message,
+                    'image_url': image_url,
+                    'prompt': prompt,
+                    'processing_time': download_time,
+                    'timestamp': datetime.now().isoformat()
+                }), 400
+            
+            logger.info(f"圖片下載成功: {temp_image_path} ({download_time:.2f}s)")
+            
+            # 取得圖片資訊
+            image_info = image_downloader.get_image_info(temp_image_path)
+            
+            # 第二步：CLIP 相似度分析
+            logger.info("步驟 2: CLIP 相似度分析...")
+            clip_start = time.time()
+            
+            # 設定驗證引擎參數
+            validation_engine.update_settings({
+                'ollama_enabled': ollama_enabled,
+                'verification_threshold': similarity_threshold,
+                'confidence_threshold': confidence_threshold
+            })
+            
+            # 執行驗證 (單一圖片)
+            validation_results = validation_engine.analyze_with_validation(
+                [temp_image_path], 
+                prompt
+            )
+            
+            if not validation_results:
+                return jsonify({
+                    'success': False,
+                    'error': 'validation_failed',
+                    'message': '驗證過程失敗',
+                    'image_url': image_url,
+                    'prompt': prompt,
+                    'timestamp': datetime.now().isoformat()
+                }), 500
+            
+            # 取得驗證結果
+            result_data = validation_results[0]
+            total_time = (datetime.now() - start_time).total_seconds()
+            
+            # 建構回應
+            result = {
+                'success': True,
+                'image_url': image_url,
+                'prompt': prompt,
+                'parameters': {
+                    'similarity_threshold': similarity_threshold,
+                    'ollama_enabled': ollama_enabled,
+                    'confidence_threshold': confidence_threshold
+                },
+                'image_info': image_info,
+                'download_info': {
+                    'status': 'success',
+                    'processing_time': download_time,
+                    'message': download_message
+                },
+                'clip_analysis': {
+                    'similarity_score': result_data.get('similarity_score', 0.0),
+                    'status': result_data.get('clip_status', 'failed'),
+                    'processing_time': total_time * 0.6  # 估算 CLIP 處理時間
+                },
+                'ollama_validation': result_data.get('ollama_validation', {
+                    'enabled': False,
+                    'status': 'skipped',
+                    'confidence': 0.0,
+                    'details': '',
+                    'processing_time': 0.0
+                }),
+                'final_status': result_data.get('final_status', 'rejected'),
+                'total_processing_time': total_time,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            logger.info(f"驗證完成，結果: {result['final_status']} (相似度: {result['clip_analysis']['similarity_score']:.3f})")
+            return jsonify(result)
+            
+        finally:
+            # 清理臨時檔案
+            if temp_image_path:
+                image_downloader.cleanup_temp_file(temp_image_path)
         
     except Exception as e:
         logger.error(f"驗證過程發生錯誤: {str(e)}")
