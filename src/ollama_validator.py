@@ -42,8 +42,9 @@ class OllamaValidator:
             Dict[str, Any]: 連線狀態資訊
         """
         try:
-            # 檢查服務狀態
-            response = requests.get(f"{self.api_url}/api/tags", timeout=5)
+            # 檢查服務狀態 (使用 session 管理連接)
+            with requests.Session() as session:
+                response = session.get(f"{self.api_url}/api/tags", timeout=5)
             
             if response.status_code == 200:
                 data = response.json()
@@ -178,12 +179,13 @@ class OllamaValidator:
                 "stream": False
             }
             
-            # 發送請求
-            response = requests.post(
-                f"{self.api_url}/api/generate",
-                json=payload,
-                timeout=self.timeout
-            )
+            # 發送請求 (使用 session 來確保連接被正確管理)
+            with requests.Session() as session:
+                response = session.post(
+                    f"{self.api_url}/api/generate",
+                    json=payload,
+                    timeout=self.timeout
+                )
             
             if response.status_code != 200:
                 result['details'] = f"API 請求失敗: HTTP {response.status_code}"

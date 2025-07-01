@@ -22,8 +22,8 @@ class ImageDownloader:
     """圖片下載器"""
     
     def __init__(self, 
-                 max_file_size: int = 50 * 1024 * 1024,  # 50MB
-                 timeout: int = 30,
+                 max_file_size: int = 20 * 1024 * 1024,  # 20MB (降低預設大小)
+                 timeout: int = 45,  # 增加超時時間應對內網傳輸
                  temp_dir: Optional[str] = None):
         """
         初始化圖片下載器
@@ -87,7 +87,15 @@ class ImageDownloader:
         
         is_image_service = any(service in url_lower for service in image_services)
         
-        return has_image_extension or is_image_service
+        # 檢查是否為內網 IP (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+        import re
+        ip_pattern = r'192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(?:1[6-9]|2[0-9]|3[01])\.\d+\.\d+'
+        is_internal_ip = bool(re.search(ip_pattern, url_lower))
+        
+        # 檢查是否為 localhost/127.0.0.1
+        is_localhost = 'localhost' in url_lower or '127.0.0.1' in url_lower
+        
+        return has_image_extension or is_image_service or is_internal_ip or is_localhost
     
     def download_image(self, url: str) -> Tuple[bool, Optional[str], str]:
         """
@@ -107,45 +115,47 @@ class ImageDownloader:
             logger.info(f"開始下載圖片: {url}")
             start_time = time.time()
             
-            # 發送 HEAD 請求檢查檔案大小
-            try:
-                head_response = requests.head(url, headers=self.headers, timeout=10)
-                if head_response.status_code == 200:
-                    content_length = head_response.headers.get('content-length')
-                    if content_length and int(content_length) > self.max_file_size:
-                        return False, None, f"檔案過大: {content_length} bytes (最大: {self.max_file_size} bytes)"
-            except Exception as e:
-                logger.warning(f"HEAD 請求失敗，繼續下載: {str(e)}")
-            
-            # 下載圖片
-            response = requests.get(url, headers=self.headers, timeout=self.timeout, stream=True)
-            response.raise_for_status()
-            
-            # 檢查 Content-Type
-            content_type = response.headers.get('content-type', '').lower()
-            if not content_type.startswith('image/'):
-                return False, None, f"不是圖片檔案: Content-Type = {content_type}"
-            
-            # 產生臨時檔案名稱
-            url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
-            timestamp = int(time.time())
-            
-            # 從 URL 或 Content-Type 推斷副檔名
-            file_ext = self._get_file_extension(url, content_type)
-            temp_filename = f"img_{timestamp}_{url_hash}{file_ext}"
-            temp_filepath = os.path.join(self.temp_dir, temp_filename)
-            
-            # 下載並儲存檔案
-            downloaded_size = 0
-            with open(temp_filepath, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        downloaded_size += len(chunk)
-                        if downloaded_size > self.max_file_size:
-                            f.close()
-                            os.unlink(temp_filepath)
-                            return False, None, f"檔案過大: {downloaded_size} bytes"
-                        f.write(chunk)
+            # 使用 session 管理連接
+            with requests.Session() as session:
+                # 發送 HEAD 請求檢查檔案大小
+                try:
+                    head_response = session.head(url, headers=self.headers, timeout=10)
+                    if head_response.status_code == 200:
+                        content_length = head_response.headers.get('content-length')
+                        if content_length and int(content_length) > self.max_file_size:
+                            return False, None, f"檔案過大: {content_length} bytes (最大: {self.max_file_size} bytes)"
+                except Exception as e:
+                    logger.warning(f"HEAD 請求失敗，繼續下載: {str(e)}")
+                
+                # 下載圖片
+                response = session.get(url, headers=self.headers, timeout=self.timeout, stream=True)
+                response.raise_for_status()
+                
+                # 檢查 Content-Type
+                content_type = response.headers.get('content-type', '').lower()
+                if not content_type.startswith('image/'):
+                    return False, None, f"不是圖片檔案: Content-Type = {content_type}"
+                
+                # 產生臨時檔案名稱
+                url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+                timestamp = int(time.time())
+                
+                # 從 URL 或 Content-Type 推斷副檔名
+                file_ext = self._get_file_extension(url, content_type)
+                temp_filename = f"img_{timestamp}_{url_hash}{file_ext}"
+                temp_filepath = os.path.join(self.temp_dir, temp_filename)
+                
+                # 下載並儲存檔案
+                downloaded_size = 0
+                with open(temp_filepath, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            downloaded_size += len(chunk)
+                            if downloaded_size > self.max_file_size:
+                                f.close()
+                                os.unlink(temp_filepath)
+                                return False, None, f"檔案過大: {downloaded_size} bytes"
+                            f.write(chunk)
             
             download_time = time.time() - start_time
             logger.info(f"圖片下載完成: {temp_filepath} ({downloaded_size} bytes, {download_time:.2f}s)")

@@ -16,19 +16,19 @@ BASE_URL = "http://localhost:5000"
 TEST_IMAGES = [
     {
         "name": "貓咪圖片",
-        "url": "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=800",
-        "prompt": "A realistic photo of a cat sitting"
+        "url": "http://192.168.153.78:8005/txt2img-images/2025-06-30/thread_17pT1g5z5oRCTRnujkF3Xm9L_story_seg_1.png",
+        "prompt": "The fat orange cat stands in the park, plump with fluffy orange-and-cream fur, round cheeks, oversized green eyes, and a tiny blue hoodie barely stretching over his belly. His short, stubby paws are at his sides, and his tail is tucked in surprise. Facial expression: wide-eyed, mouth agape. In the background, his slender, stylish ex-girlfriend (a silver tabby with a pink bow) nuzzles a lean, muscular white tabby. The scene features sunlight filtering through city trees and a fallen donut beside fat orange cat."
     },
-    {
-        "name": "狗狗圖片", 
-        "url": "https://images.unsplash.com/photo-1552053831-71594a27632d?w=800",
-        "prompt": "A realistic photo of a dog"
-    },
-    {
-        "name": "風景圖片 (不匹配)",
-        "url": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800", 
-        "prompt": "A realistic photo of a cat"
-    }
+    # {
+    #     "name": "狗狗圖片", 
+    #     "url": "https://images.unsplash.com/photo-1552053831-71594a27632d?w=800",
+    #     "prompt": "A realistic photo of a dog"
+    # },
+    # {
+    #     "name": "風景圖片 (不匹配)",
+    #     "url": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800", 
+    #     "prompt": "A realistic photo of a cat"
+    # }
 ]
 
 def test_real_validation():

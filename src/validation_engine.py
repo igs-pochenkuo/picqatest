@@ -298,4 +298,28 @@ class ValidationEngine:
         if self.ollama_validator:
             info['ollama_status'] = self.ollama_validator.check_connection()
         
-        return info 
+        return info
+    
+    def cleanup_resources(self):
+        """清理所有資源"""
+        try:
+            # 清理 SimilarityEngine 資源
+            if hasattr(self, 'similarity_engine') and self.similarity_engine:
+                self.similarity_engine.cleanup_resources()
+                self.similarity_engine = None
+            
+            # 清理 Ollama 驗證器（雖然它沒有特殊資源，但為了一致性）
+            if hasattr(self, 'ollama_validator'):
+                self.ollama_validator = None
+            
+            # 重置狀態
+            self.initialized = False
+            
+            print("ValidationEngine 資源已清理")
+            
+        except Exception as e:
+            print(f"清理 ValidationEngine 資源時發生錯誤: {e}")
+    
+    def __del__(self):
+        """析構函數，清理資源"""
+        self.cleanup_resources() 

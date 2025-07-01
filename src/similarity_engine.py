@@ -132,6 +132,7 @@ class SimilarityEngine:
         Returns:
             Optional[torch.Tensor]: 預處理後的圖片張量
         """
+        image = None
         try:
             # 載入圖片
             image = Image.open(image_path).convert('RGB')
@@ -142,10 +143,21 @@ class SimilarityEngine:
             
             # 預處理
             image_tensor = self.preprocess(image).unsqueeze(0)
+            
+            # 明確關閉圖片物件
+            if image:
+                image.close()
+            
             return image_tensor.to(self.device)
             
         except Exception as e:
             print(f"預處理圖片 {image_path} 時發生錯誤: {e}")
+            # 確保圖片資源被釋放
+            if image:
+                try:
+                    image.close()
+                except:
+                    pass
             return None
     
     def preprocess_text(self, prompt: str) -> Optional[torch.Tensor]:
@@ -205,6 +217,16 @@ class SimilarityEngine:
                 
                 # 計算餘弦相似度
                 similarity = torch.cosine_similarity(image_features, text_features).item()
+                
+                # 清理中間張量
+                del image_features, text_features
+                
+            # 清理輸入張量
+            del image_tensor, text_tensor
+            
+            # 清理 GPU 快取 (如果使用 CUDA)
+            if str(self.device) != 'cpu':
+                torch.cuda.empty_cache()
             
             # 快取結果
             self._set_cached_similarity(image_path, prompt, similarity)
@@ -292,7 +314,38 @@ class SimilarityEngine:
             os.remove(cache_file)
         print("快取已清除")
     
+    def cleanup_resources(self):
+        """清理所有資源"""
+        try:
+            # 清理 CLIP 模型
+            if hasattr(self, 'model') and self.model is not None:
+                # 移動模型到 CPU 並清空 CUDA 快取
+                if str(self.device) != 'cpu':
+                    self.model = self.model.cpu()
+                    torch.cuda.empty_cache()
+                del self.model
+                self.model = None
+                
+            # 清理預處理器
+            if hasattr(self, 'preprocess'):
+                del self.preprocess
+                self.preprocess = None
+                
+            # 清理分詞器
+            if hasattr(self, 'tokenizer'):
+                del self.tokenizer
+                self.tokenizer = None
+                
+            # 儲存並清理快取
+            if hasattr(self, '_cache') and self.cache_enabled:
+                self._save_cache()
+                self._cache.clear()
+                
+            print("SimilarityEngine 資源已清理")
+            
+        except Exception as e:
+            print(f"清理 SimilarityEngine 資源時發生錯誤: {e}")
+    
     def __del__(self):
-        """析構函數，儲存快取"""
-        if hasattr(self, '_cache') and self.cache_enabled:
-            self._save_cache() 
+        """析構函數，清理資源"""
+        self.cleanup_resources() 

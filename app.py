@@ -13,6 +13,7 @@ from datetime import datetime
 import os
 import sys
 import time
+import atexit
 
 # 添加 src 目錄到 Python 路徑
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
@@ -65,6 +66,27 @@ def initialize_services():
         logger.error(f"服務初始化失敗: {str(e)}")
         logger.error(traceback.format_exc())
         return False
+
+def cleanup_application():
+    """應用程式關閉時的資源清理"""
+    try:
+        global validation_engine
+        if 'validation_engine' in globals() and validation_engine:
+            logger.info("開始清理驗證引擎資源...")
+            # 清理 SimilarityEngine 資源
+            if hasattr(validation_engine, 'similarity_engine') and validation_engine.similarity_engine:
+                validation_engine.similarity_engine.cleanup_resources()
+            
+            # 清理 ValidationEngine 本身
+            if hasattr(validation_engine, 'cleanup_resources'):
+                validation_engine.cleanup_resources()
+                
+        logger.info("應用程式資源清理完成")
+    except Exception as e:
+        logger.error(f"清理應用程式資源時發生錯誤: {str(e)}")
+
+# 註冊應用程式關閉時的清理函數
+atexit.register(cleanup_application)
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -209,6 +231,20 @@ def validate_image():
             # 清理臨時檔案
             if temp_image_path:
                 image_downloader.cleanup_temp_file(temp_image_path)
+                
+            # 額外的資源清理
+            try:
+                # 清理 GPU 快取
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
+                # 強制垃圾回收
+                import gc
+                gc.collect()
+                
+            except Exception as e:
+                logger.warning(f"額外資源清理時發生警告: {str(e)}")
         
     except Exception as e:
         logger.error(f"驗證過程發生錯誤: {str(e)}")
