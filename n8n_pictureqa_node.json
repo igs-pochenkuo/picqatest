@@ -1,0 +1,30 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:5000/api/v1/validate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n   \"name\": \"testPic\",\n   \"image_url\": \"{{ $json.image_url }}\",\n   \"prompt\": \"{{ $json.prompt || 'A realistic photo' }}\",\n   \"ollama_enabled\": {{ $json.ollama_enabled !== undefined ? $json.ollama_enabled : true }},\n   \"confidence_threshold\": {{ $json.confidence_threshold || 0.7 }},\n   \"similarity_threshold\": {{ $json.similarity_threshold || 0.3 }}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1940,
+        380
+      ],
+      "id": "1a840fc6-8dd5-462f-bffb-6069f9f7bb87",
+      "name": "PictureQA Validation"
+    }
+  ],
+  "connections": {
+    "PictureQA Validation": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "pinData": {}
+}

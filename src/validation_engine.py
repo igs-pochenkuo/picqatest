@@ -154,6 +154,7 @@ class ValidationEngine:
             if progress_callback:
                 progress_callback(0.4, f"開始 Ollama 現實性驗證 ({len(images_for_validation)} 張圖片)...")
             
+            self.ollama_validator.start_service()
             # 檢查 Ollama 連線
             connection_status = self.ollama_validator.check_connection()
             if not connection_status['connected']:
@@ -217,6 +218,8 @@ class ValidationEngine:
         if progress_callback:
             progress_callback(1.0, "驗證完成！")
         
+        self.ollama_validator.stop()
+
         return results
     
     def determine_final_status(self, result: Dict[str, Any]) -> str:

@@ -14,16 +14,17 @@ BASE_URL = "http://localhost:5000"
 
 # 測試用的真實圖片 URL
 TEST_IMAGES = [
+    # {
+    #     "name": "貓咪圖片",
+    #     "url": "http://192.168.153.78:8005/txt2img-images/2025-06-30/thread_17pT1g5z5oRCTRnujkF3Xm9L_story_seg_1.png",
+    #     "prompt": "The fat orange cat stands in the park, plump with fluffy orange-and-cream fur, round cheeks, oversized green eyes, and a tiny blue hoodie barely stretching over his belly. His short, stubby paws are at his sides, and his tail is tucked in surprise. Facial expression: wide-eyed, mouth agape. In the background, his slender, stylish ex-girlfriend (a silver tabby with a pink bow) nuzzles a lean, muscular white tabby. The scene features sunlight filtering through city trees and a fallen donut beside fat orange cat."
+    # },
     {
         "name": "貓咪圖片",
-        "url": "http://192.168.153.78:8005/txt2img-images/2025-06-30/thread_17pT1g5z5oRCTRnujkF3Xm9L_story_seg_1.png",
-        "prompt": "The fat orange cat stands in the park, plump with fluffy orange-and-cream fur, round cheeks, oversized green eyes, and a tiny blue hoodie barely stretching over his belly. His short, stubby paws are at his sides, and his tail is tucked in surprise. Facial expression: wide-eyed, mouth agape. In the background, his slender, stylish ex-girlfriend (a silver tabby with a pink bow) nuzzles a lean, muscular white tabby. The scene features sunlight filtering through city trees and a fallen donut beside fat orange cat."
+        "url": "http://192.168.153.78:8005/txt2img-images/2025-07-02/thread_1JpoizUF4rmMidmuBM09lbZC_story_seg_1.png",
+        "prompt": "Da Pang Mao, a chubby, oversized orange tabby cat with a round face, fluffy cheeks, small triangular ears, and tiny blue eyes, is sprawled lazily on a sunlit windowsill. She wears a tiny, tight white T-shirt with a cartoon fish print barely fitting her belly, her striped tail drooped down. Her facial expression instantly shifts to wide-eyed panic and an open mouth, while her body stiffens up in a half-sit posture. The room is a cozy living room with potted plants and a scratch post in the background.",
+        "similarity_threshold": 0.3
     },
-    # {
-    #     "name": "狗狗圖片", 
-    #     "url": "https://images.unsplash.com/photo-1552053831-71594a27632d?w=800",
-    #     "prompt": "A realistic photo of a dog"
-    # },
     # {
     #     "name": "風景圖片 (不匹配)",
     #     "url": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800", 

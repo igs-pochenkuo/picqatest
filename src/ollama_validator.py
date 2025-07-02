@@ -7,6 +7,10 @@ import requests
 import json
 import base64
 import time
+import subprocess
+import psutil
+import sys
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Callable, Any
 from PIL import Image
@@ -389,4 +393,425 @@ class OllamaValidator:
             'abnormal_count': 0,
             'error_count': 0,
             'total_time': 0.0
-        } 
+        }
+
+    def stop(self, force: bool = False, progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
+        """
+        停止 Ollama 服務 (簡化版本，用於快速調用)
+        
+        Args:
+            force (bool): 是否強制終止，預設為 False（優雅關閉）
+            progress_callback (Optional[Callable], optional): 進度回調函數
+            
+        Returns:
+            Dict[str, Any]: 停止操作結果
+        """
+        return self.stop_ollama(force=force, progress_callback=progress_callback)
+
+    def start_service(self, progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
+        """
+        啟動 Ollama 服務 (對外接口)
+        
+        Args:
+            progress_callback (Optional[Callable], optional): 進度回調函數
+            
+        Returns:
+            Dict[str, Any]: 啟動操作結果
+        """
+        result = {
+            'success': False,
+            'message': '',
+            'method_used': '',
+            'connection_status': None
+        }
+        
+        try:
+            if progress_callback:
+                progress_callback(0.1, "檢查 Ollama 服務狀態...")
+            
+            # 第一步：檢查服務是否已經在運行
+            connection_status = self.check_connection()
+            result['connection_status'] = connection_status
+            
+            if connection_status['connected']:
+                result.update({
+                    'success': True,
+                    'message': f'Ollama 服務已在運行。{connection_status["message"]}',
+                    'method_used': 'already_running'
+                })
+                if progress_callback:
+                    progress_callback(1.0, "服務已在運行")
+                return result
+            
+            if progress_callback:
+                progress_callback(0.2, "服務未運行，準備啟動...")
+            
+            # 第二步：嘗試啟動服務
+            startup_success = self._start_ollama_service(progress_callback)
+            
+            if startup_success:
+                # 第三步：再次檢查連接狀態
+                if progress_callback:
+                    progress_callback(0.95, "驗證服務啟動狀態...")
+                
+                final_connection = self.check_connection()
+                result['connection_status'] = final_connection
+                
+                if final_connection['connected']:
+                    result.update({
+                        'success': True,
+                        'message': f'Ollama 服務啟動成功！{final_connection["message"]}',
+                        'method_used': 'started'
+                    })
+                else:
+                    result.update({
+                        'success': False,
+                        'message': f'服務啟動但連接檢查失敗: {final_connection["message"]}',
+                        'method_used': 'started_but_not_connected'
+                    })
+            else:
+                result.update({
+                    'success': False,
+                    'message': '無法啟動 Ollama 服務。請檢查 Ollama 是否正確安裝',
+                    'method_used': 'failed_to_start'
+                })
+            
+            if progress_callback:
+                progress_callback(1.0, "啟動操作完成")
+                
+        except Exception as e:
+            result.update({
+                'success': False,
+                'message': f'啟動 Ollama 時發生錯誤: {str(e)}',
+                'method_used': 'error'
+            })
+            
+            if progress_callback:
+                progress_callback(1.0, f"啟動操作失敗: {str(e)}")
+        
+        return result
+
+    def stop_ollama(self, force: bool = False, progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
+        """
+        停止 Ollama 服務
+        
+        Args:
+            force (bool): 是否強制終止，預設為 False（優雅關閉）
+            progress_callback (Optional[Callable], optional): 進度回調函數
+            
+        Returns:
+            Dict[str, Any]: 停止操作結果
+        """
+        result = {
+            'success': False,
+            'message': '',
+            'processes_found': 0,
+            'processes_stopped': 0,
+            'method_used': ''
+        }
+        
+        try:
+            if progress_callback:
+                progress_callback(0.1, "正在搜尋 Ollama 進程...")
+            
+            # 第一步：檢查服務是否正在運行
+            connection_status = self.check_connection()
+            if not connection_status['connected']:
+                result.update({
+                    'success': True,
+                    'message': 'Ollama 服務未運行或已經停止',
+                    'method_used': 'not_running'
+                })
+                return result
+            
+            if progress_callback:
+                progress_callback(0.2, "發現 Ollama 服務正在運行，開始停止程序...")
+            
+            # 第二步：尋找 Ollama 相關進程
+            ollama_processes = []
+            ollama_executables = ['ollama.exe', 'ollama', 'ollama app.exe', 'ollama serve']
+            
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    proc_info = proc.info
+                    proc_name = proc_info['name'].lower() if proc_info['name'] else ''
+                    proc_cmdline = ' '.join(proc_info['cmdline']).lower() if proc_info['cmdline'] else ''
+                    
+                    # 檢查是否為 Ollama 相關進程
+                    if any(exec_name.lower() in proc_name for exec_name in ollama_executables) or \
+                       any(exec_name.lower() in proc_cmdline for exec_name in ollama_executables):
+                        ollama_processes.append(proc)
+                        
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    continue
+            
+            result['processes_found'] = len(ollama_processes)
+            
+            if not ollama_processes:
+                result.update({
+                    'success': True,
+                    'message': '沒有找到 Ollama 進程，可能已經停止',
+                    'method_used': 'no_processes'
+                })
+                return result
+            
+            if progress_callback:
+                progress_callback(0.4, f"找到 {len(ollama_processes)} 個 Ollama 進程，開始停止...")
+            
+            # 第三步：停止進程
+            stopped_count = 0
+            
+            if not force:
+                # 優雅關閉：先嘗試 SIGTERM
+                if progress_callback:
+                    progress_callback(0.5, "嘗試優雅關閉 Ollama 進程...")
+                
+                for i, proc in enumerate(ollama_processes):
+                    try:
+                        proc.terminate()  # 發送 SIGTERM
+                        if progress_callback:
+                            progress_callback(0.5 + (i + 1) / len(ollama_processes) * 0.2, 
+                                            f"正在停止進程 {proc.pid}...")
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+                
+                # 等待進程優雅退出
+                if progress_callback:
+                    progress_callback(0.7, "等待進程退出...")
+                
+                time.sleep(3)
+                
+                # 檢查哪些進程已經停止
+                remaining_processes = []
+                for proc in ollama_processes:
+                    try:
+                        if proc.is_running():
+                            remaining_processes.append(proc)
+                        else:
+                            stopped_count += 1
+                    except psutil.NoSuchProcess:
+                        stopped_count += 1
+                
+                ollama_processes = remaining_processes
+                result['method_used'] = 'graceful'
+            
+            # 第四步：強制終止剩餘進程（如果需要）
+            if ollama_processes and (force or len(ollama_processes) > 0):
+                if progress_callback:
+                    progress_callback(0.8, f"強制終止剩餘的 {len(ollama_processes)} 個進程...")
+                
+                for i, proc in enumerate(ollama_processes):
+                    try:
+                        proc.kill()  # 發送 SIGKILL
+                        stopped_count += 1
+                        if progress_callback:
+                            progress_callback(0.8 + (i + 1) / len(ollama_processes) * 0.15, 
+                                            f"強制停止進程 {proc.pid}...")
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        pass
+                
+                if result['method_used'] == '':
+                    result['method_used'] = 'forced'
+                else:
+                    result['method_used'] += '_then_forced'
+                
+                # 再等待一下
+                time.sleep(1)
+            
+            result['processes_stopped'] = stopped_count
+            
+            # 第五步：最終驗證
+            if progress_callback:
+                progress_callback(0.95, "驗證服務是否已停止...")
+            
+            time.sleep(1)  # 給服務一點時間完全停止
+            final_connection = self.check_connection()
+            
+            if not final_connection['connected']:
+                result.update({
+                    'success': True,
+                    'message': f'Ollama 服務已成功停止。共處理 {result["processes_found"]} 個進程，停止了 {stopped_count} 個'
+                })
+            else:
+                result.update({
+                    'success': False,
+                    'message': f'部分進程可能仍在運行。共找到 {result["processes_found"]} 個進程，停止了 {stopped_count} 個，但服務似乎仍可連接'
+                })
+            
+            if progress_callback:
+                progress_callback(1.0, "停止操作完成")
+            
+        except Exception as e:
+            result.update({
+                'success': False,
+                'message': f'停止 Ollama 時發生錯誤: {str(e)}',
+                'method_used': 'error'
+            })
+            
+            if progress_callback:
+                progress_callback(1.0, f"停止操作失敗: {str(e)}")
+        
+        return result
+
+    def restart_ollama(self, progress_callback: Optional[Callable] = None) -> Dict[str, Any]:
+        """
+        重新啟動 Ollama 服務
+        
+        Args:
+            progress_callback (Optional[Callable], optional): 進度回調函數
+            
+        Returns:
+            Dict[str, Any]: 重啟操作結果
+        """
+        result = {
+            'success': False,
+            'message': '',
+            'stop_result': None,
+            'start_result': None
+        }
+        
+        try:
+            # 第一步：停止服務
+            if progress_callback:
+                def stop_progress(progress, message):
+                    progress_callback(progress * 0.6, f"停止階段: {message}")
+                
+                stop_result = self.stop_ollama(force=False, progress_callback=stop_progress)
+            else:
+                stop_result = self.stop_ollama(force=False)
+            
+            result['stop_result'] = stop_result
+            
+            if not stop_result['success']:
+                result['message'] = f"停止 Ollama 失敗: {stop_result['message']}"
+                return result
+            
+            # 等待一下確保完全停止
+            time.sleep(2)
+            
+            # 第二步：啟動服務
+            if progress_callback:
+                progress_callback(0.7, "開始啟動 Ollama 服務...")
+            
+            start_success = self._start_ollama_service(progress_callback)
+            
+            if start_success:
+                result.update({
+                    'success': True,
+                    'message': 'Ollama 服務重啟成功'
+                })
+            else:
+                result.update({
+                    'success': False,
+                    'message': 'Ollama 停止成功，但重新啟動失敗'
+                })
+            
+        except Exception as e:
+            result.update({
+                'success': False,
+                'message': f'重啟 Ollama 時發生錯誤: {str(e)}'
+            })
+        
+        return result
+
+    def _start_ollama_service(self, progress_callback: Optional[Callable] = None) -> bool:
+        """
+        啟動 Ollama 服務（內部方法）
+        
+        Args:
+            progress_callback (Optional[Callable], optional): 進度回調函數
+            
+        Returns:
+            bool: 啟動是否成功
+        """
+        try:
+            # 檢查是否已經運行
+            if progress_callback:
+                progress_callback(0.8, "檢查服務狀態...")
+            
+            connection_status = self.check_connection()
+            if connection_status['connected']:
+                if progress_callback:
+                    progress_callback(1.0, "服務已在運行")
+                return True
+            
+            if progress_callback:
+                progress_callback(0.85, "尋找 Ollama 執行檔...")
+            
+            # 尋找 Ollama 執行檔
+            ollama_path = self._find_ollama_executable()
+            if not ollama_path:
+                return False
+            
+            if progress_callback:
+                progress_callback(0.9, "啟動 Ollama 服務...")
+            
+            # 啟動服務
+            if sys.platform == "win32":
+                # Windows: 在背景啟動
+                subprocess.Popen([ollama_path, "serve"], 
+                               creationflags=subprocess.CREATE_NEW_CONSOLE)
+            else:
+                # Linux/Mac: 在背景啟動
+                subprocess.Popen([ollama_path, "serve"], 
+                               stdout=subprocess.DEVNULL, 
+                               stderr=subprocess.DEVNULL)
+            
+            # 等待服務啟動
+            if progress_callback:
+                progress_callback(0.95, "等待服務啟動...")
+            
+            for i in range(10):  # 最多等待 10 秒
+                time.sleep(1)
+                connection_status = self.check_connection()
+                if connection_status['connected']:
+                    if progress_callback:
+                        progress_callback(1.0, "服務啟動成功")
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            print(f"啟動 Ollama 服務失敗: {str(e)}")
+            return False
+
+    def _find_ollama_executable(self) -> Optional[str]:
+        """
+        尋找 Ollama 執行檔路徑
+        
+        Returns:
+            Optional[str]: 執行檔路徑，找不到返回 None
+        """
+        # 常見的 Ollama 執行檔位置
+        possible_paths = []
+        
+        if sys.platform == "win32":
+            # Windows 路徑
+            possible_paths.extend([
+                "ollama.exe",
+                "C:\\Program Files\\Ollama\\ollama.exe",
+                "C:\\Program Files (x86)\\Ollama\\ollama.exe",
+                os.path.join(os.path.expanduser("~"), "AppData", "Local", "Programs", "Ollama", "ollama.exe"),
+            ])
+        else:
+            # Linux/Mac 路徑
+            possible_paths.extend([
+                "ollama",
+                "/usr/local/bin/ollama",
+                "/usr/bin/ollama",
+                "/opt/ollama/bin/ollama",
+                os.path.join(os.path.expanduser("~"), "bin", "ollama"),
+            ])
+        
+        # 檢查每個可能的路徑
+        for path in possible_paths:
+            if os.path.isfile(path) and os.access(path, os.X_OK):
+                return path
+        
+        # 嘗試在 PATH 中尋找
+        import shutil
+        ollama_in_path = shutil.which("ollama")
+        if ollama_in_path:
+            return ollama_in_path
+        
+        return None 

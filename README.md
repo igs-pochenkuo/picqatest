@@ -248,37 +248,77 @@ services:
 
 ## 🔗 N8N 整合範例
 
-### N8N 工作流程節點
+### 快速匯入 (推薦)
+
+我們提供了現成的 N8N 節點配置，你可以直接匯入使用：
+
+1. **複製節點配置**: 打開 [`n8n_pictureqa_node.json`](./n8n_pictureqa_node.json) 並複製全部內容
+2. **匯入到 N8N**: 
+   - 在 N8N 介面中，點擊右上角的 **"..."** 選單
+   - 選擇 **"Import from clipboard"**
+   - 貼上複製的 JSON 內容
+   - 點擊 **"Import"**
+3. **配置參數**: 匯入後調整以下參數：
+   - `image_url`: 設定為你的圖片 URL 變數
+   - `prompt`: 設定你的描述文字
+   - 其他閾值參數可保持預設值
+
+### 節點配置說明
+
+匯入的節點包含以下配置：
 
 ```json
 {
-  "nodes": [
-    {
-      "parameters": {
-        "url": "http://localhost:5000/api/v1/validate",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "image_url",
-              "value": "={{ $json.image_url }}"
-            },
-            {
-              "name": "prompt",
-              "value": "A realistic photo"
-            },
-            {
-              "name": "similarity_threshold",
-              "value": 0.4
-            }
-          ]
-        }
-      },
-      "name": "PictureQA Validation",
-      "type": "n8n-nodes-base.httpRequest"
-    }
-  ]
+  "name": "PictureQA Validation",
+  "type": "n8n-nodes-base.httpRequest", 
+  "url": "http://127.0.0.1:5000/api/v1/validate",
+  "method": "POST",
+  "body": {
+    "image_url": "{{ $json.image_url }}",
+    "prompt": "{{ $json.prompt || 'A realistic photo' }}",
+    "similarity_threshold": "{{ $json.similarity_threshold || 0.3 }}",
+    "ollama_enabled": "{{ $json.ollama_enabled || true }}",
+    "confidence_threshold": "{{ $json.confidence_threshold || 0.7 }}"
+  }
 }
+```
+
+### 參數客製化
+
+你可以根據需求修改這些參數：
+
+| 參數 | 說明 | 預設值 | 建議範圍 |
+|------|------|--------|----------|
+| `similarity_threshold` | CLIP 相似度閾值 | 0.3 | 0.2-0.6 |
+| `confidence_threshold` | Ollama 信心度閾值 | 0.7 | 0.5-0.9 |
+| `ollama_enabled` | 是否啟用 Ollama 驗證 | true | true/false |
+
+### 輸出處理建議
+
+節點輸出後，你可以使用以下表達式來決定下一步動作：
+
+```javascript
+// 簡單判斷：是否需要重新產圖
+{{ $json.clip_analysis.similarity_score < 0.4 || $json.ollama_validation.status === "abnormal" || $json.final_status === "rejected" }}
+
+// 檢查是否有浮水印
+{{ $json.ollama_validation.issues.watermarks.length > 0 }}
+
+// 取得相似度分數
+{{ $json.clip_analysis.similarity_score }}
+
+// 取得驗證詳情
+{{ $json.ollama_validation.details }}
+```
+
+### N8N 工作流程範例
+
+完整的工作流程可能是這樣：
+
+```
+[圖片生成] → [PictureQA驗證] → [條件判斷] → [接受圖片]
+                                  ↓
+                            [重新產生圖片]
 ```
 
 ## 📊 效能指標
