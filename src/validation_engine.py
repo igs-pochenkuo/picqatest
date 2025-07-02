@@ -226,43 +226,72 @@ class ValidationEngine:
         """
         決定最終驗證狀態
         
+        根據狄狼建議的正確邏輯：
+        - verification_threshold 同時決定觸發 Ollama 和最終接受門檻
+        - 如果沒有開啟 ollama 2階段驗證 -> 只看 clip 結果
+        - 如果有開啟 ollama 2階段驗證：
+          * clip 結果異常 -> 回傳 rejected
+          * clip 結果正常但相似度不足 -> 回傳 rejected
+          * clip 結果正常且相似度足夠，ollama abnormal -> 回傳 rejected  
+          * clip 結果正常且相似度足夠，ollama normal -> 回傳 accepted
+        
         Args:
             result (Dict[str, Any]): 驗證結果
             
         Returns:
             str: 最終狀態 ('accepted' 或 'rejected')
         """
-        # CLIP 失敗直接拒絕
+        # 添加日誌輸出
+        clip_status = result['clip_status']
+        similarity_score = result['similarity_score']
+        verification_threshold = self.settings['verification_threshold']
+        ollama_enabled = self.settings['ollama_enabled']
+        
+        print(f"🔍 [決策日誌] CLIP狀態: {clip_status}")
+        print(f"🔍 [決策日誌] 相似度: {similarity_score:.3f}")
+        print(f"🔍 [決策日誌] 門檻: {verification_threshold}")
+        print(f"🔍 [決策日誌] Ollama啟用: {ollama_enabled}")
+        
+        # 1. CLIP 失敗直接拒絕
         if result['clip_status'] != 'success':
+            print(f"🔍 [決策日誌] 步驟1: CLIP失敗 → rejected")
             return 'rejected'
         
-        # 如果沒有啟用 Ollama，只依據 CLIP 結果
-        if not self.settings['ollama_enabled']:
-            return 'accepted'
-        
-        # 相似度低於門檻，跳過 Ollama 驗證但接受
+        # 2. CLIP 成功，檢查相似度是否符合門檻
         if result['similarity_score'] < self.settings['verification_threshold']:
+            print(f"🔍 [決策日誌] 步驟2: 相似度 {similarity_score:.3f} < 門檻 {verification_threshold} → rejected")
+            return 'rejected'
+        
+        # 3. 如果沒有啟用 Ollama，CLIP 通過就接受
+        if not self.settings['ollama_enabled']:
+            print(f"🔍 [決策日誌] 步驟3: 未啟用Ollama，CLIP通過 → accepted")
             return 'accepted'
         
-        # 檢查 Ollama 驗證結果
+        # 4. 啟用了 Ollama，檢查 Ollama 驗證結果
         ollama_status = result['ollama_validation']['status']
         ollama_confidence = result['ollama_validation']['confidence']
         
-        # Ollama 驗證失敗或錯誤，降級為只看 CLIP 結果
+        print(f"🔍 [決策日誌] 步驟4: Ollama狀態: {ollama_status}, 信心度: {ollama_confidence}")
+        
+        # 5. Ollama 驗證失敗或錯誤，當作異常處理 → 拒絕
         if ollama_status in ['error', 'skipped']:
+            print(f"🔍 [決策日誌] 步驟5: Ollama {ollama_status} → rejected")
+            return 'rejected'
+        
+        # 6. Ollama 判定為異常 → 拒絕
+        if ollama_status == 'abnormal':
+            print(f"🔍 [決策日誌] 步驟6: Ollama異常 → rejected")
+            return 'rejected'
+        
+        # 7. Ollama 判定為正常 → 接受
+        if ollama_status == 'normal':
+            print(f"🔍 [決策日誌] 步驟7: Ollama正常 → accepted")
+            # 可以選擇性地檢查信心度，但判定為正常就接受
             return 'accepted'
         
-        # Ollama 判定為異常
-        if ollama_status == 'abnormal':
-            # 檢查信心度是否足夠
-            if ollama_confidence >= self.settings['confidence_threshold']:
-                return 'rejected'
-            else:
-                # 信心度不足，接受圖片
-                return 'accepted'
-        
-        # Ollama 判定為正常
-        return 'accepted'
+        # 8. 其他未知狀態，預設拒絕
+        print(f"🔍 [決策日誌] 步驟8: 未知狀態 {ollama_status} → rejected")
+        return 'rejected'
     
     def get_validation_summary(self) -> Dict[str, Any]:
         """

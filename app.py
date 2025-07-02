@@ -191,6 +191,15 @@ def validate_image():
             result_data = validation_results[0]
             total_time = (datetime.now() - start_time).total_seconds()
             
+            # 印出驗證結果資料以便除錯
+            print("=== 驗證結果資料 ===")
+            print(f"完整 result_data: {result_data}")
+            print(f"相似度分數: {result_data.get('similarity_score', 'N/A')}")
+            print(f"CLIP 狀態: {result_data.get('clip_status', 'N/A')}")
+            print(f"Ollama 驗證: {result_data.get('ollama_validation', 'N/A')}")
+            print(f"最終狀態: {result_data.get('final_status', 'N/A')}")
+            print("==================")
+
             # 建構回應
             result = {
                 'success': True,
